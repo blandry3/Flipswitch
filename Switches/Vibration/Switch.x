@@ -27,15 +27,15 @@ static void VibrationSettingsChanged(CFNotificationCenterRef center, void *obser
 
 - (FSSwitchState)stateForSwitchIdentifier:(NSString *)switchIdentifier
 {
-    NSDictionary *dict;
     if (kCFCoreFoundationVersionNumber >= 1000) {
-        dict = [NSDictionary dictionaryWithContentsOfFile:kSpringBoardPlist];
-    } else {
-        dict = [[NSUserDefaults standardUserDefaults] persistentDomainForName:@"com.apple.springboard"];
-    }
-    BOOL enabled = ([[dict valueForKey:@"ring-vibrate"] boolValue] && [[dict valueForKey:@"silent-vibrate"] boolValue]);
-
+        CFPreferencesAppSynchronize(CFSTR("com.apple.springboard"));
+	BOOL enabled = (CFPreferencesGetAppBooleanValue(CFSTR("ring-vibrate"), CFSTR("com.apple.springboard"),NULL) && CFPreferencesGetAppBooleanValue(CFSTR("silent-vibrate"), CFSTR("com.apple.springboard"),NULL));
 	return enabled;
+    } else {
+        NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:kSpringBoardPlist];
+        BOOL enabled = ([[dict valueForKey:@"ring-vibrate"] boolValue] && [[dict valueForKey:@"silent-vibrate"] boolValue]);
+        return enabled;
+    }
 }
 
 - (void)applyState:(FSSwitchState)newState forSwitchIdentifier:(NSString *)switchIdentifier
@@ -43,21 +43,18 @@ static void VibrationSettingsChanged(CFNotificationCenterRef center, void *obser
 	if (newState == FSSwitchStateIndeterminate)
 		return;
 
-    NSMutableDictionary *dict;
     if (kCFCoreFoundationVersionNumber >= 1000) {
-        dict = [[NSMutableDictionary alloc] init];
-        NSNumber *value = [NSNumber numberWithBool:newState];
-        [dict setValue:value forKey:@"ring-vibrate"];
-        [dict setValue:value forKey:@"silent-vibrate"];
-        [[NSUserDefaults standardUserDefaults] setPersistentDomain:dict forName:@"com.apple.springboard"];
+	CFPreferencesSetAppValue(CFSTR("ring-vibrate"), (CFTypeRef)[NSNumber numberWithBool:newState], CFSTR("com.apple.springboard"));
+	CFPreferencesSetAppValue(CFSTR("silent-vibrate"), (CFTypeRef)[NSNumber numberWithBool:newState], CFSTR("com.apple.springboard"));
+	CFPreferencesAppSynchronize(CFSTR("com.apple.springboard"));
     } else {
-        dict = [[NSMutableDictionary alloc] initWithContentsOfFile:kSpringBoardPlist] ?: [[NSMutableDictionary alloc] init];
+        NSMutableDictionary *dict = [[NSMutableDictionary alloc] initWithContentsOfFile:kSpringBoardPlist] ?: [[NSMutableDictionary alloc] init];
         NSNumber *value = [NSNumber numberWithBool:newState];
         [dict setValue:value forKey:@"ring-vibrate"];
         [dict setValue:value forKey:@"silent-vibrate"];
         [dict writeToFile:kSpringBoardPlist atomically:YES];
+    	[dict release];
     }
-    [dict release];
 
     notify_post("com.apple.springboard.ring-vibrate.changed");
     GSSendAppPreferencesChanged(CFSTR("com.apple.springboard"), CFSTR("ring-vibrate"));
